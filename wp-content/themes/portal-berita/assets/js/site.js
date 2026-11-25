@@ -107,6 +107,17 @@
     var auto = box.getAttribute('data-autoplay') === '1' && !reduce;
     var media = null;
     var muted = true;
+    // Siaran baru diputar setelah pembaca berinteraksi (gulir, sentuh, klik, tombol),
+    // agar pemutar YouTube yang berat tidak memperlambat saat halaman dibuka.
+    var interacted = false;
+    var pendingAuto = false;
+    var EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart', 'wheel'];
+    function onInteract() {
+      interacted = true;
+      EVENTS.forEach(function (ev) { window.removeEventListener(ev, onInteract, true); });
+      if (pendingAuto && !box.hidden) { load(false); }
+    }
+    EVENTS.forEach(function (ev) { window.addEventListener(ev, onInteract, { capture: true, passive: true }); });
 
     function store(k, v) {
       try { if (v) { sessionStorage.setItem(k, v); } else { sessionStorage.removeItem(k); } } catch (e) { /* diblokir: berlaku sampai pindah halaman */ }
@@ -138,6 +149,8 @@
         media.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
       }
       media.className = 'pb-float__media';
+      var old = frame.querySelector('.pb-float__poster');
+      if (old) { old.remove(); }
       frame.insertBefore(media, frame.firstChild);
       if (playBtn) { playBtn.hidden = true; }
       if (muteBtn) { muteBtn.hidden = false; muteBtn.setAttribute('aria-pressed', String(!muted)); }
@@ -148,10 +161,20 @@
       if (playBtn) { playBtn.hidden = false; }
       if (muteBtn) { muteBtn.hidden = true; }
     }
+    function poster() {
+      var url = box.getAttribute('data-poster');
+      if (!url || media || frame.querySelector('.pb-float__poster')) { return; }
+      var img = document.createElement('img');
+      img.src = url;
+      img.alt = '';
+      img.className = 'pb-float__poster';
+      frame.insertBefore(img, frame.firstChild);
+    }
     function show() {
       box.hidden = false;
       if (launch) { launch.hidden = true; }
-      if (auto) { load(false); }
+      if (!auto) { poster(); return; }
+      if (interacted) { load(false); } else { pendingAuto = true; poster(); }
     }
     function showLaunch() {
       if (launch && read(key + ':launch') !== 'tutup') { launch.hidden = false; }
